@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+if [[ ! -z $NIX_USER_PROFILE_DIR ]]; then
+  nix-env -iA nixos.google-cloud-sdk
+fi
+
+which gcloud || { echo "Unable to setup gcloud"; exit 1; }
+
+gcloud init
+gcloud config set compute/region us-west1
+gcloud config set compute/zone us-west1-b
