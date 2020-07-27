@@ -1,0 +1,51 @@
+#!/usr/bin/env ruby
+
+require "tempfile"
+
+ca_config = Tempfile.new(["ca-config", ".json"])
+File.write(ca_config.path, <<~JSON)
+{
+  "signing": {
+    "default": {
+      "expiry": "8760h"
+    },
+    "profiles": {
+      "kubernetes": {
+        "usages": ["signing", "key encipherment", "server auth", "client auth"],
+        "expiry": "8760h"
+      }
+    }
+  }
+}
+JSON
+
+%w[worker-0 worker-1 worker-2].each do |worker|
+  kubelet_csr = Tempfile.new(["kubelet-csr-#{worker}", ".json"])
+  File.write(kubelet_csr.path, <<~JSON)
+  {
+    "CN": "system:node:#{worker}",
+    "key": {
+      "algo": "rsa",
+      "size": 2048
+    },
+    "names": [
+      {
+        "C": "US",
+        "L": "Portland",
+        "O": "system:nodes",
+        "OU": "Kubernetes The Hard Way",
+        "ST": "Oregon"
+      }
+    ]
+  }
+  JSON
+
+  external_ip = `gcloud compute instances describe #{worker} --format 'value(networkInterfaces[0].accessConfigs[0].natIP)'`.strip
+  internal_ip = `gcloud compute instances describe #{worker} --format 'value(networkInterfaces[0].networkIP)'`.strip
+
+  cmd = "cfssl gencert -initca -config #{ca_config.path} -ca ca.pem -ca-key ca-key.pem -hostname=#{worker},#{external_ip},#{internal_ip} -profile kubernetes #{kubelet_csr.path} | cfssljson -bare #{worker}"
+
+  puts "> \033[0;33m#{cmd}\033[0m"
+  system cmd
+  exit $?.exitstatus unless $?.success?
+end

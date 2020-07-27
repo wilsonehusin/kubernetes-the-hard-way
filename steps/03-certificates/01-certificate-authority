@@ -1,0 +1,46 @@
+#!/usr/bin/env ruby
+
+require "tempfile"
+
+ca_config = Tempfile.new(["ca-config", ".json"])
+File.write(ca_config.path, <<~JSON)
+{
+  "signing": {
+    "default": {
+      "expiry": "8760h"
+    },
+    "profiles": {
+      "kubernetes": {
+        "usages": ["signing", "key encipherment", "server auth", "client auth"],
+        "expiry": "8760h"
+      }
+    }
+  }
+}
+JSON
+
+ca_csr = Tempfile.new(["ca-csr", ".json"])
+File.write(ca_csr.path, <<~JSON)
+{
+  "CN": "Kubernetes",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "US",
+      "L": "Portland",
+      "O": "Kubernetes",
+      "OU": "CA",
+      "ST": "Oregon"
+    }
+  ]
+}
+JSON
+
+cmd = "cfssl gencert -initca -config #{ca_config.path} #{ca_csr.path} | cfssljson -bare ca"
+
+puts "> \033[0;33m#{cmd}\033[0m"
+system cmd
+exit $?.exitstatus
